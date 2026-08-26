@@ -9,7 +9,9 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 TRAIN_DATA_PATH = DATA_DIR / "KDDTrain+.txt"
 TEST_DATA_PATH = DATA_DIR / "KDDTest+.txt"
 DEFAULT_MODEL_PATH = MODELS_DIR / "nsl_kdd_intrusion_model.joblib"
+DEFAULT_ANOMALY_MODEL_PATH = MODELS_DIR / "nsl_kdd_anomaly_model.joblib"
 DEFAULT_METRICS_PATH = REPORTS_DIR / "evaluation_metrics.json"
+DEFAULT_ANOMALY_METRICS_PATH = REPORTS_DIR / "anomaly_evaluation_metrics.json"
 
 RAW_LABEL_COLUMN = "label"
 TARGET_COLUMN = "attack_class"
@@ -116,6 +118,7 @@ ATTACK_CLASS_TO_ID = {
     "u2r": 4,
 }
 
+NORMAL_CLASS_ID = ATTACK_CLASS_TO_ID["normal"]
 ATTACK_ID_TO_CLASS = {value: key for key, value in ATTACK_CLASS_TO_ID.items()}
 ATTACK_TO_CLASS_ID = {
     attack: ATTACK_CLASS_TO_ID[class_name]

@@ -4,7 +4,12 @@ from pathlib import Path
 import pandas as pd
 import joblib
 
-from .constants import DEFAULT_MODEL_PATH, MODEL_FEATURE_COLUMNS, NSL_KDD_COLUMNS
+from .constants import (
+    DEFAULT_ANOMALY_MODEL_PATH,
+    DEFAULT_MODEL_PATH,
+    MODEL_FEATURE_COLUMNS,
+    NSL_KDD_COLUMNS,
+)
 from .preprocess import decode_attack_class
 
 
@@ -31,6 +36,7 @@ def predict_file(
     input_path: str | Path,
     output_path: str | Path,
     model_path: str | Path = DEFAULT_MODEL_PATH,
+    anomaly_model_path: str | Path | None = DEFAULT_ANOMALY_MODEL_PATH,
 ) -> pd.DataFrame:
     model = joblib.load(model_path)
     input_path = Path(input_path)
@@ -43,6 +49,14 @@ def predict_file(
     output["predicted_attack_class_id"] = predictions
     output["predicted_attack_class"] = [decode_attack_class(value) for value in predictions]
 
+    if anomaly_model_path:
+        anomaly_model_path = Path(anomaly_model_path)
+        if anomaly_model_path.exists():
+            anomaly_model = joblib.load(anomaly_model_path)
+            anomaly_predictions = anomaly_model.predict(frame)
+            output["is_anomaly"] = anomaly_predictions == -1
+            output["anomaly_score"] = -anomaly_model.decision_function(frame)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output.to_csv(output_path, index=False)
     return output
@@ -53,12 +67,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("input_path", type=Path)
     parser.add_argument("output_path", type=Path)
     parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH, type=Path)
+    parser.add_argument(
+        "--anomaly-model-path",
+        default=DEFAULT_ANOMALY_MODEL_PATH,
+        type=Path,
+        help="Optional anomaly model path. If present, anomaly columns are added.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    output = predict_file(args.input_path, args.output_path, args.model_path)
+    output = predict_file(
+        args.input_path,
+        args.output_path,
+        model_path=args.model_path,
+        anomaly_model_path=args.anomaly_model_path,
+    )
     print(f"Wrote {len(output)} predictions to {args.output_path}")
 
 

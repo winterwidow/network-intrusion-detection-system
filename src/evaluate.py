@@ -1,3 +1,5 @@
+"""reports multiclass performance metrics"""
+
 import argparse
 import json
 from pathlib import Path

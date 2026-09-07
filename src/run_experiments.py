@@ -4,7 +4,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from .constants import MODELS_DIR, REPORTS_DIR, TEST_DATA_PATH, TRAIN_DATA_PATH
+from .constants import MODELS_DIR, TEST_DATA_PATH, TRAIN_DATA_PATH
 from .evaluate import evaluate_model
 from .experiment_tracker import EXPERIMENTS_PATH, log_experiment
 from .train import _parse_max_features, train_model
@@ -30,7 +30,6 @@ def run_experiment(
 ) -> dict:
     run_id = build_run_id(model_name)
     model_path = MODELS_DIR / f"{run_id}.joblib"
-    metrics_path = REPORTS_DIR / f"{run_id}_metrics.json"
 
     params = {
         "n_estimators": n_estimators,
@@ -52,7 +51,7 @@ def run_experiment(
     metrics = evaluate_model(
         model_path=model_path,
         test_path=test_path,
-        metrics_path=metrics_path,
+        metrics_path=None,
     )
     row = log_experiment(
         run_id=run_id,
@@ -60,7 +59,7 @@ def run_experiment(
         params=params,
         metrics=metrics,
         model_path=model_path,
-        metrics_path=metrics_path,
+        metrics_path=None,
         experiments_path=experiments_path,
     )
 

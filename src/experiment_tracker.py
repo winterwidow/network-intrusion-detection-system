@@ -34,7 +34,7 @@ def log_experiment(
     params: dict[str, Any],
     metrics: dict[str, Any],
     model_path: str | Path,
-    metrics_path: str | Path,
+    metrics_path: str | Path | None = None,
     experiments_path: str | Path = EXPERIMENTS_PATH,
 ) -> dict[str, Any]:
     experiments_path = Path(experiments_path)
@@ -45,7 +45,7 @@ def log_experiment(
         "model_name": model_name,
         "params": json.dumps(params, sort_keys=True),
         "model_path": str(model_path),
-        "metrics_path": str(metrics_path),
+        "metrics_path": "" if metrics_path is None else str(metrics_path),
     }
     row.update(_flatten_metrics(metrics))
 

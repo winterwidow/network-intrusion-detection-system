@@ -62,6 +62,8 @@ The raw dataset includes fields such as:
 │   ├── train_anomaly.py
 │   ├── evaluate.py
 │   ├── evaluate_anomaly.py
+│   ├── experiment_tracker.py
+│   ├── run_experiments.py
 │   └── predict.py
 ├── LICENSE
 ├── README.md
@@ -80,6 +82,8 @@ The raw dataset includes fields such as:
 - `src/train_anomaly.py` - trains an Isolation Forest on normal traffic only
 - `src/evaluate.py` - reports multiclass performance metrics
 - `src/evaluate_anomaly.py` - reports anomaly detection metrics such as ROC-AUC
+- `src/experiment_tracker.py` - appends experiment results to a CSV tracker
+- `src/run_experiments.py` - trains, evaluates, and logs one parameterized run
 - `src/predict.py` - loads a CSV and writes predictions
 
 ---
@@ -153,6 +157,25 @@ The training process is:
 Random Forest was selected as the default because it handles mixed tabular features well, can model nonlinear relationships, and is less sensitive to feature scaling than many linear models. Class balancing is enabled with `balanced_subsample` to reduce the effect of uneven class frequencies.
 
 The repository also supports Decision Tree, Extra Trees, and Logistic Regression models for comparison.
+
+### Experiment tracking
+
+Use `src.run_experiments` when you want to manually change parameters and compare results.
+
+Example:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_experiments --model random_forest --n-estimators 200 --max-depth 20 --max-features sqrt --min-samples-leaf 1 --class-weight balanced_subsample
+```
+
+Each run saves a separate model and appends metrics to the experiment CSV:
+
+```text
+models/<run_id>.joblib
+reports/experiments.csv
+```
+
+Change one or two parameters per run. Compare `accuracy`, `macro_f1`, `weighted_f1`, and per-class recall in `reports/experiments.csv`.
 
 ### Anomaly detection
 

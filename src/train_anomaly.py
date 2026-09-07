@@ -1,3 +1,5 @@
+"""trains an Isolation Forest on normal traffic only to detect anomalies"""
+
 import argparse
 from pathlib import Path
 

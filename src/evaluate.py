@@ -22,7 +22,7 @@ from .preprocess import split_features_target
 def evaluate_model(
     model_path: str | Path = DEFAULT_MODEL_PATH,
     test_path: str | Path = TEST_DATA_PATH,
-    metrics_path: str | Path = DEFAULT_METRICS_PATH,
+    metrics_path: str | Path | None = DEFAULT_METRICS_PATH,
 ) -> dict:
     model = joblib.load(model_path)
     test_df = load_dataset(test_path)
@@ -46,14 +46,16 @@ def evaluate_model(
         "labels": {str(label): ATTACK_ID_TO_CLASS[label] for label in labels},
     }
 
-    metrics_path = Path(metrics_path)
-    metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-
     report_frame = pd.DataFrame(metrics["classification_report"]).T
     print(f"Accuracy: {metrics['accuracy']:.4f}")
     print(report_frame.to_string())
-    print(f"Saved metrics to {metrics_path}")
+
+    if metrics_path is not None:
+        metrics_path = Path(metrics_path)
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        print(f"Saved metrics to {metrics_path}")
+
     return metrics
 
 
@@ -62,6 +64,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH, type=Path)
     parser.add_argument("--test-path", default=TEST_DATA_PATH, type=Path)
     parser.add_argument("--metrics-path", default=DEFAULT_METRICS_PATH, type=Path)
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Print metrics without writing a JSON metrics file.",
+    )
     return parser.parse_args()
 
 
@@ -70,7 +77,7 @@ def main() -> None:
     evaluate_model(
         model_path=args.model_path,
         test_path=args.test_path,
-        metrics_path=args.metrics_path,
+        metrics_path=None if args.no_save else args.metrics_path,
     )
 
 

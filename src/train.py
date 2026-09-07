@@ -1,3 +1,5 @@
+"""trains the multiclass intrusion model"""
+
 import argparse
 from pathlib import Path
 
@@ -12,34 +14,67 @@ from .data_loader import load_data
 from .preprocess import build_preprocessor, split_features_target
 
 
-def build_classifier(model_name: str):
+def _parse_max_features(value: str | None) -> str | float | int | None:
+    if value in (None, "", "none", "None"):
+        return None
+    if value in {"sqrt", "log2"}:
+        return value
+    try:
+        number = float(value)
+    except ValueError as exc:
+        raise ValueError("max_features must be sqrt, log2, none, an int, or a float") from exc
+    if number.is_integer() and number >= 1:
+        return int(number)
+    return number
+
+
+def build_classifier(
+    model_name: str,
+    n_estimators: int = 100,
+    max_depth: int | None = None,
+    max_features: str | float | int | None = 7,
+    min_samples_split: int = 2,
+    min_samples_leaf: int = 1,
+    class_weight: str | None = "balanced_subsample",
+    random_state: int = 42,
+):
     if model_name == "decision_tree":
         return DecisionTreeClassifier(
-            max_depth=8,
-            max_features=8,
-            random_state=42,
+            max_depth=max_depth,
+            max_features=max_features,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            class_weight=None if class_weight == "balanced_subsample" else class_weight,
+            random_state=random_state,
         )
     if model_name == "extra_trees":
         return ExtraTreesClassifier(
-            n_estimators=100,
-            max_features=7,
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            max_features=max_features,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            class_weight=class_weight,
             n_jobs=-1,
-            random_state=42,
+            random_state=random_state,
         )
     if model_name == "logistic_regression":
         return LogisticRegression(
-            class_weight="balanced",
+            class_weight="balanced" if class_weight == "balanced_subsample" else class_weight,
             max_iter=1000,
             n_jobs=-1,
-            random_state=42,
+            random_state=random_state,
         )
     if model_name == "random_forest":
         return RandomForestClassifier(
-            class_weight="balanced_subsample",
-            max_features=7,
-            n_estimators=100,
+            class_weight=class_weight,
+            max_depth=max_depth,
+            max_features=max_features,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            n_estimators=n_estimators,
             n_jobs=-1,
-            random_state=42,
+            random_state=random_state,
         )
 
     supported = "decision_tree, extra_trees, logistic_regression, random_forest"
@@ -51,6 +86,13 @@ def train_model(
     test_path: str | Path = TEST_DATA_PATH,
     model_path: str | Path = DEFAULT_MODEL_PATH,
     model_name: str = "random_forest",
+    n_estimators: int = 100,
+    max_depth: int | None = None,
+    max_features: str | float | int | None = 7,
+    min_samples_split: int = 2,
+    min_samples_leaf: int = 1,
+    class_weight: str | None = "balanced_subsample",
+    random_state: int = 42,
 ) -> Pipeline:
     train_df, _ = load_data(train_path, test_path)
     X_train, y_train = split_features_target(train_df)
@@ -58,7 +100,19 @@ def train_model(
     model = Pipeline(
         steps=[
             ("preprocess", build_preprocessor(list(X_train.columns))),
-            ("classifier", build_classifier(model_name)),
+            (
+                "classifier",
+                build_classifier(
+                    model_name=model_name,
+                    n_estimators=n_estimators,
+                    max_depth=max_depth,
+                    max_features=max_features,
+                    min_samples_split=min_samples_split,
+                    min_samples_leaf=min_samples_leaf,
+                    class_weight=class_weight,
+                    random_state=random_state,
+                ),
+            ),
         ]
     )
     model.fit(X_train, y_train)
@@ -79,6 +133,17 @@ def parse_args() -> argparse.Namespace:
         choices=["decision_tree", "extra_trees", "logistic_regression", "random_forest"],
         default="random_forest",
     )
+    parser.add_argument("--n-estimators", default=100, type=int)
+    parser.add_argument("--max-depth", default=None, type=int)
+    parser.add_argument("--max-features", default="7")
+    parser.add_argument("--min-samples-split", default=2, type=int)
+    parser.add_argument("--min-samples-leaf", default=1, type=int)
+    parser.add_argument(
+        "--class-weight",
+        choices=["none", "balanced", "balanced_subsample"],
+        default="balanced_subsample",
+    )
+    parser.add_argument("--random-state", default=42, type=int)
     return parser.parse_args()
 
 
@@ -89,6 +154,13 @@ def main() -> None:
         test_path=args.test_path,
         model_path=args.model_path,
         model_name=args.model,
+        n_estimators=args.n_estimators,
+        max_depth=args.max_depth,
+        max_features=_parse_max_features(args.max_features),
+        min_samples_split=args.min_samples_split,
+        min_samples_leaf=args.min_samples_leaf,
+        class_weight=None if args.class_weight == "none" else args.class_weight,
+        random_state=args.random_state,
     )
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Saved {args.model} pipeline to {args.model_path}")

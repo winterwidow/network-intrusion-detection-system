@@ -1,3 +1,5 @@
+"""loads a test csv and writes predictions"""
+
 import argparse
 from pathlib import Path
 

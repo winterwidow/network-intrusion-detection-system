@@ -195,7 +195,7 @@ The anomaly evaluation converts the test set into a binary problem: `normal` ver
 
 ## Evaluation metrics
 
-The results below are from the evaluation recorded in `evaluation_metrics.txt` using 22,544 test records. Precision measures how often a predicted class is correct, recall measures how many records of that class were found, and F1-score combines both measures.
+The results below are from the evaluation recorded in `reports/evaluation_metrics.json` using 22,544 test records. Precision measures how often a predicted class is correct, recall measures how many records of that class were found, and F1-score combines both measures.
 
 ### Multiclass classifier (`src.evaluate`)
 

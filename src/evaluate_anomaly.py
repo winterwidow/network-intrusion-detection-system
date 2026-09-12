@@ -1,3 +1,5 @@
+"""reports anomaly detection metrics such as ROC-AUC"""
+
 import argparse
 import json
 from pathlib import Path

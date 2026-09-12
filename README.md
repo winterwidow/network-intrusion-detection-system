@@ -62,6 +62,8 @@ The raw dataset includes fields such as:
 │   ├── train_anomaly.py
 │   ├── evaluate.py
 │   ├── evaluate_anomaly.py
+│   ├── experiment_tracker.py
+│   ├── run_experiments.py
 │   └── predict.py
 ├── LICENSE
 ├── README.md
@@ -80,6 +82,8 @@ The raw dataset includes fields such as:
 - `src/train_anomaly.py` - trains an Isolation Forest on normal traffic only
 - `src/evaluate.py` - reports multiclass performance metrics
 - `src/evaluate_anomaly.py` - reports anomaly detection metrics such as ROC-AUC
+- `src/experiment_tracker.py` - appends experiment results to a CSV tracker
+- `src/run_experiments.py` - trains, evaluates, and logs one parameterized run
 - `src/predict.py` - loads a CSV and writes predictions
 
 ---
@@ -88,11 +92,7 @@ The raw dataset includes fields such as:
 
 The preprocessing pipeline is implemented in `src/preprocess.py` and is applied before training.
 
-### 1. Loading the data
-
-`src/data_loader.py` reads the raw `.txt` files with pandas using the NSL-KDD column names from `src/constants.py`.
-
-### 2. Mapping attack labels
+### 1. Mapping attack labels
 
 The raw label column is converted into a more manageable target using a mapping table:
 
@@ -104,14 +104,14 @@ The raw label column is converted into a more manageable target using a mapping 
 
 This is done by mapping class names such as `neptune`, `satan`, `guess_passwd`, and `buffer_overflow` into the broader category IDs.
 
-### 3. Feature separation
+### 2. Feature separation
 
 The model excludes the raw label column and the computed target from the feature set. Categorical fields are separated from numeric fields:
 
 - categorical: `protocol_type`, `service`, `flag`
 - numeric: all remaining non-categorical features
 
-### 4. Feature encoding and scaling
+### 3. Feature encoding and scaling
 
 The pipeline uses:
 
@@ -120,22 +120,15 @@ The pipeline uses:
 
 This ensures that the model receives a consistent numeric representation for both continuous and categorical inputs.
 
-### 5. Anomaly detection setup
+### 4. Anomaly detection setup
 
 For anomaly detection, only the `normal` traffic samples are used to train an `IsolationForest` model. This makes the detector learn a representation of normal behavior and flag abnormal samples as anomalies.
 
 ---
 
-## Setup
+## Requirements
 
-From the project root:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Required dependencies are listed in `requirements.txt`:
+The project uses Python and the dependencies listed in `requirements.txt`:
 
 - pandas
 - scikit-learn
@@ -143,105 +136,103 @@ Required dependencies are listed in `requirements.txt`:
 
 ---
 
-## Training the intrusion model
+## Methodology
 
-Train the default model (random forest):
+The project uses two complementary machine-learning approaches because intrusion detection has two related goals: classify attacks that are already represented in the training data and identify traffic that differs from normal behavior.
+
+### Multiclass intrusion classification
+
+The primary model is a Random Forest classifier. Each tree learns a set of decision rules from a sampled view of the training data, and the final prediction is selected by combining the trees' predictions.
+
+The training process is:
+
+1. Load the NSL-KDD training records.
+2. Convert individual attack names into five broader classes: `normal`, `dos`, `probe`, `r2l`, and `u2r`.
+3. Remove the raw label and use the 41 connection features plus `difficulty_level` as input features.
+4. One-hot encode `protocol_type`, `service`, and `flag` so categorical values can be used by the estimator.
+5. Standardize numeric features with `StandardScaler`.
+6. Fit the preprocessing and Random Forest steps together in a scikit-learn pipeline.
+7. Evaluate the saved pipeline on the separate NSL-KDD test set.
+
+Random Forest was selected as the default because it handles mixed tabular features well, can model nonlinear relationships, and is less sensitive to feature scaling than many linear models. Class balancing is enabled with `balanced_subsample` to reduce the effect of uneven class frequencies.
+
+The repository also supports Decision Tree, Extra Trees, and Logistic Regression models for comparison.
+
+### Experiment tracking
+
+Use `src.run_experiments` when you want to manually change parameters and compare results.
+
+Example:
 
 ```powershell
-.\.venv\Scripts\python.exe -m src.train
+.\.venv\Scripts\python.exe -m src.run_experiments --model random_forest --n-estimators 200 --max-depth 20 --max-features sqrt --min-samples-leaf 1 --class-weight balanced_subsample
 ```
 
-This saves the pipeline to:
+Each run saves a separate model and appends metrics to the experiment CSV:
 
 ```text
-models/nsl_kdd_intrusion_model.joblib
+models/<run_id>.joblib
+reports/experiments.csv
 ```
 
-Available model choices are:
+Change one or two parameters per run. Compare `accuracy`, `macro_f1`, `weighted_f1`, and per-class recall in `reports/experiments.csv`.
 
-- `random_forest` (default)
-- `decision_tree`
-- `extra_trees`
-- `logistic_regression`
+### Anomaly detection
 
-Train an alternative model for testing:
+The anomaly model is an Isolation Forest. Unlike the classifier, it is trained only on records labelled `normal`; attack labels are not used as target classes during fitting.
 
-```powershell
-.\.venv\Scripts\python.exe -m src.train --model decision_tree
-```
+Isolation Forest works by repeatedly partitioning the feature space. Records that are isolated in fewer partitions are considered more unusual and receive a higher anomaly score. The model uses a contamination setting of `0.02`, representing the expected fraction of unusual records in the normal-only training data.
+
+This approach is useful because an anomaly detector can flag behavior that does not belong to one of the known attack categories. Its output is interpreted as:
+
+- `is_anomaly = false`: the record resembles the learned normal traffic
+- `is_anomaly = true`: the record is sufficiently unusual according to the detector
+- `anomaly_score`: higher values indicate more unusual behavior
+
+The anomaly evaluation converts the test set into a binary problem: `normal` versus `anomaly`, where every known attack category is treated as an anomaly.
 
 ---
 
-## Model evaluation
+## Evaluation metrics
 
-Evaluate the intrusion classifier on the test set:
+The results below are from the evaluation recorded in `reports/evaluation_metrics.json` using 22,544 test records. Precision measures how often a predicted class is correct, recall measures how many records of that class were found, and F1-score combines both measures.
 
-```powershell
-.\.venv\Scripts\python.exe -m src.evaluate
-```
+### Multiclass classifier (`src.evaluate`)
 
-This writes detailed metrics to:
+| Class                |  Precision |     Recall |   F1-score |    Support |
+| -------------------- | ---------: | ---------: | ---------: | ---------: |
+| normal               |     0.6375 |     0.9734 |     0.7704 |      9,711 |
+| dos                  |     0.9592 |     0.7559 |     0.8455 |      7,460 |
+| probe                |     0.8350 |     0.6167 |     0.7094 |      2,421 |
+| r2l                  |     0.8824 |     0.0104 |     0.0206 |      2,885 |
+| u2r                  |     0.8000 |     0.1791 |     0.2927 |         67 |
+| **Overall accuracy** |            |            | **0.7375** | **22,544** |
+| **Macro average**    | **0.8228** | **0.5071** | **0.5277** | **22,544** |
+| **Weighted average** | **0.7970** | **0.7375** | **0.6913** | **22,544** |
 
-```text
-reports/evaluation_metrics.json
-```
+The classifier identifies normal traffic particularly well, with 97.34% recall, and performs best on DoS attacks by F1-score. The very low recall for `r2l` and `u2r` shows that the minority attack classes remain difficult to detect. This is an important limitation: overall accuracy is influenced by the larger classes and does not fully represent performance on rare attacks.
 
-The evaluation includes:
+### Anomaly detector (`src.evaluate_anomaly`)
 
-- overall accuracy
-- per-class precision, recall, and F1-score
-- confusion matrix
-- class label mapping
+| Class                |  Precision |     Recall |   F1-score |    Support |
+| -------------------- | ---------: | ---------: | ---------: | ---------: |
+| normal               |     0.6686 |     0.9762 |     0.7936 |      9,711 |
+| anomaly              |     0.9724 |     0.6338 |     0.7674 |     12,833 |
+| **Accuracy**         |            |            | **0.7813** | **22,544** |
+| **Macro average**    | **0.8205** | **0.8050** | **0.7805** | **22,544** |
+| **Weighted average** | **0.8415** | **0.7813** | **0.7787** | **22,544** |
 
----
-
-## Anomaly detection
-
-The supervised classifier predicts known attack categories. The anomaly detector complements this by identifying unusual records that do not match normal traffic behavior.
-
-Train the anomaly model:
-
-```powershell
-.\.venv\Scripts\python.exe -m src.train_anomaly
-```
-
-This saves the anomaly detector to:
-
-```text
-models/nsl_kdd_anomaly_model.joblib
-```
-
-Evaluate it as a normal-vs-anomaly detector:
-
-```powershell
-.\.venv\Scripts\python.exe -m src.evaluate_anomaly
-```
-
-Metrics are written to:
-
-```text
-reports/anomaly_evaluation_metrics.json
-```
-
-The anomaly evaluation reports:
-
-- ROC-AUC
-- binary classification report for `normal` vs `anomaly`
-- confusion matrix
+The anomaly detector achieved a ROC-AUC of **0.9510**, indicating strong separation between normal and attack records across different score thresholds. It has high anomaly precision, meaning flagged records are usually anomalous, while its 63.38% anomaly recall shows that some attacks still resemble normal traffic and are missed.
 
 ---
 
 ## Prediction
 
-You can run predictions on a CSV file with either:
+The prediction pipeline accepts:
 
 - a headered CSV containing the model feature columns
 - a raw NSL-KDD file with all columns
 - a headerless feature-only file matching the model input shape
-
-```powershell
-.\.venv\Scripts\python.exe -m src.predict input.csv reports/predictions.csv
-```
 
 If the anomaly model exists, the output also includes:
 
@@ -250,7 +241,7 @@ If the anomaly model exists, the output also includes:
 - `is_anomaly`
 - `anomaly_score`
 
-Prediction output is saved to `reports/predictions.csv` in the example above.
+Prediction output contains the original features together with the predicted class ID and class name. When available, it also contains the anomaly flag and score.
 
 ---
 
@@ -262,4 +253,3 @@ After training and evaluation, the project generates:
 - `models/nsl_kdd_anomaly_model.joblib` - trained anomaly detector
 - `reports/evaluation_metrics.json` - multiclass classification metrics
 - `reports/anomaly_evaluation_metrics.json` - anomaly detection metrics
-

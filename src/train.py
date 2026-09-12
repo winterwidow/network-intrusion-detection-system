@@ -48,7 +48,7 @@ def build_classifier(
             max_features=max_features,
             min_samples_split=min_samples_split,
             min_samples_leaf=min_samples_leaf,
-            class_weight=None if class_weight == "balanced_subsample" else class_weight,
+            class_weight="balanced" if class_weight == "balanced_subsample" else class_weight,
             random_state=random_state,
         )
     if model_name == "extra_trees":

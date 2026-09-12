@@ -23,8 +23,12 @@ def _parse_max_features(value: str | None) -> str | float | int | None:
         number = float(value)
     except ValueError as exc:
         raise ValueError("max_features must be sqrt, log2, none, an int, or a float") from exc
-    if number.is_integer() and number >= 1:
+    if number.is_integer():
+        if number < 1:
+            raise ValueError("max_features int must be >= 1")
         return int(number)
+    if not (0.0 < number <= 1.0):
+        raise ValueError("max_features float must be in (0, 1]")
     return number
 
 

@@ -1,3 +1,5 @@
+"""converts labels, identifies feature columns, and prepares preprocessing transformers"""
+
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
